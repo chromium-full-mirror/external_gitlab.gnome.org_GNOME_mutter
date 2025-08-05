@@ -646,6 +646,8 @@ if have_wayland
     'wayland/meta-wayland-input.h',
     'wayland/meta-wayland-input-device.c',
     'wayland/meta-wayland-input-device.h',
+    'wayland/meta-wayland-ui-controls.c',
+    'wayland/meta-wayland-ui-controls.h',
     'wayland/meta-wayland-keyboard.c',
     'wayland/meta-wayland-keyboard.h',
     'wayland/meta-wayland-legacy-xdg-foreign.c',
@@ -1148,6 +1150,7 @@ if have_wayland
     ['xdg-system-bell', 'staging', 'v1', ],
     ['xdg-toplevel-drag', 'staging', 'v1'],
     ['xwayland-keyboard-grab', 'unstable', 'v1', ],
+    ['ui-controls-unstable-v1', 'private', ],
   ]
   if have_wayland_eglstream
     wayland_eglstream_protocols_dir = wayland_eglstream_protocols_dep.get_variable('pkgdatadir')

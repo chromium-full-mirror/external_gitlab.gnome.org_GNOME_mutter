@@ -20,6 +20,7 @@
 #include "config.h"
 
 #include <glib-object.h>
+#include <glib.h>
 #include <linux/input.h>
 
 #include "backends/meta-backend-private.h"
@@ -154,19 +155,14 @@ get_button_type (uint16_t code)
   return EVDEV_BUTTON_TYPE_NONE;
 }
 
-static gboolean
-release_device_in_impl (GTask *task)
+static void
+do_release_pressed_in_impl (ImplState *impl_state)
 {
-  ImplState *impl_state = g_task_get_task_data (task);
   MetaSeatImpl *seat_impl = impl_state->seat_impl;
   int code;
   uint64_t time_us;
 
   time_us = g_get_monotonic_time ();
-
-  meta_topic (META_DEBUG_INPUT,
-              "Releasing pressed buttons while destroying virtual input device "
-              "(device %p)", impl_state->device);
 
   for (code = 0; code < G_N_ELEMENTS (impl_state->button_count); code++)
     {
@@ -194,11 +190,23 @@ release_device_in_impl (GTask *task)
           g_assert_not_reached ();
         }
     }
+}
 
-  meta_seat_impl_remove_virtual_input_device (seat_impl, impl_state->device);
+static gboolean
+release_pressed_in_impl (GTask *task)
+{
+  int code;
+  ImplState *impl_state = g_task_get_task_data (task);
+  meta_topic (META_DEBUG_INPUT,
+              "Virtual input device (device %p) release pressed",
+              impl_state->device);
+  do_release_pressed_in_impl (impl_state);
 
-  g_clear_object (&impl_state->device);
-  g_task_return_boolean (task, TRUE);
+  // Also reset button count
+  for (code = 0; code < G_N_ELEMENTS (impl_state->button_count); code++)
+    {
+      impl_state->button_count[code] = 0;
+    }
   return G_SOURCE_REMOVE;
 }
 
@@ -208,6 +216,47 @@ meta_virtual_input_device_native_get_seat_native (MetaVirtualInputDeviceNative *
   ClutterSeat *seat =
     clutter_virtual_input_device_get_seat (CLUTTER_VIRTUAL_INPUT_DEVICE (virtual_native));
   return META_SEAT_NATIVE (seat);
+}
+
+static void
+meta_virtual_input_device_native_release_pressed (
+  ClutterVirtualInputDevice *virtual_device)
+{
+  MetaVirtualInputDeviceNative *virtual_native =
+    META_VIRTUAL_INPUT_DEVICE_NATIVE (virtual_device);
+  MetaSeatNative *seat_native =
+    meta_virtual_input_device_native_get_seat_native (virtual_native);
+  MetaSeatImpl *seat = seat_native->impl;
+
+  ImplState *impl_state = virtual_native->impl_state;
+  g_autoptr (GTask) task = NULL;
+
+  g_return_if_fail (impl_state != NULL);
+
+  task = g_task_new (virtual_device, NULL, NULL, NULL);
+  g_task_set_task_data (task, impl_state, NULL);
+  meta_seat_impl_run_input_task (seat, task,
+                                 (GSourceFunc) release_pressed_in_impl);
+}
+
+static gboolean
+release_device_in_impl (GTask *task)
+{
+  ImplState *impl_state = g_task_get_task_data (task);
+  MetaSeatImpl *seat_impl = impl_state->seat_impl;
+
+  meta_topic (META_DEBUG_INPUT,
+              "Releasing pressed buttons while destroying virtual input device "
+              "(device %p)",
+              impl_state->device);
+
+  do_release_pressed_in_impl (impl_state);
+
+  meta_seat_impl_remove_virtual_input_device (seat_impl, impl_state->device);
+
+  g_clear_object (&impl_state->device);
+  g_task_return_boolean (task, TRUE);
+  return G_SOURCE_REMOVE;
 }
 
 static gboolean
@@ -1157,6 +1206,7 @@ meta_virtual_input_device_native_class_init (MetaVirtualInputDeviceNativeClass *
   virtual_input_device_class->notify_touch_down = meta_virtual_input_device_native_notify_touch_down;
   virtual_input_device_class->notify_touch_motion = meta_virtual_input_device_native_notify_touch_motion;
   virtual_input_device_class->notify_touch_up = meta_virtual_input_device_native_notify_touch_up;
+  virtual_input_device_class->release_pressed = meta_virtual_input_device_native_release_pressed;
 
   obj_props[PROP_SLOT_BASE] = g_param_spec_uint ("slot-base", NULL, NULL,
                                                  0, G_MAXUINT, 0,
