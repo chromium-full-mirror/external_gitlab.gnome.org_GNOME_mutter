@@ -814,7 +814,14 @@ meta_settings_init (MetaSettings *settings)
   update_xwayland_disable_extensions (settings);
   update_privacy_settings (settings);
   update_xwayland_allow_byte_swapped_clients (settings);
-  update_output_luminance_settings (settings);
+
+  // Chromium: This needs a newer org.gnome.mutter.gschema.xml settings schema
+  // than is currently provided by the gsettings-desktop-schemas package on the
+  // bots. As the output luminance setting isn't important for running our tests,
+  // we just comment this out, instead of having to package
+  // gsettings-desktop-schemas ourselves.
+  //
+  // update_output_luminance_settings (settings);
 }
 
 static void
